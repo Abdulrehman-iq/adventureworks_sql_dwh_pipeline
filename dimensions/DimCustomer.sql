@@ -1,149 +1,153 @@
-ALTER   PROCEDURE usp_LoadDimCustomer
+CREATE PROCEDURE dbo.usp_load_dimcustomer
 AS
-BEGIN
-    SET NOCOUNT ON;
-
-    MERGE AdventureWorksDW.dbo.DimCustomer AS target
-    USING (
-        SELECT
-            ISNULL(dg.GeographyKey, -1) AS GeographyKey,
-            c.CustomerID AS CustomerAlternateKey,
-            ISNULL(p.Title, 'Unknown') AS Title,
-            ISNULL(p.FirstName, 'Unknown') AS FirstName,
-            ISNULL(p.MiddleName, 'Unknown') AS MiddleName,
-            ISNULL(p.LastName, 'Unknown') AS LastName,
-            ISNULL(p.NameStyle, 0) AS NameStyle,
-            e.BirthDate,
-            ISNULL(e.MaritalStatus, 'Unknown') AS MaritalStatus,
-            ISNULL(p.Suffix, 'Unknown') AS Suffix,
-            ISNULL(e.Gender, 'Unknown') AS Gender,
-            ISNULL(ea.EmailAddress, 'Unknown') AS EmailAddress,
-            CASE
-                WHEN eph.PayFrequency = 1 THEN eph.Rate
-                WHEN eph.PayFrequency = 2 THEN eph.Rate * 40 * 50
-                ELSE 0
-            END AS YearlyIncome,
-            0 AS TotalChildren,
-            0 AS NumberChildrenAtHome,
-            'Unknown' AS EnglishEducation,
-            'Unknown' AS SpanishEducation,
-            'Unknown' AS FrenchEducation,
-            'Unknown' AS EnglishOccupation,
-            'Unknown' AS SpanishOccupation,
-            'Unknown' AS FrenchOccupation,
-            0 AS HouseOwnerFlag,
-            0 AS NumberCarsOwned,
-            ISNULL(hmd.AddressLine1, 'Unknown') AS AddressLine1,
-            ISNULL(ofcd.AddressLine1, 'Unknown') AS AddressLine2,
-            ISNULL(pp.PhoneNumber, 'Unknown') AS Phone,
-            pd.PurchaseDate AS DateFirstPurchase,
-            'Unknown' AS CommuteDistance
-            -- SELECT COUNT(1)
-        FROM AdventureWorks.Sales.Customer c
-        LEFT JOIN AdventureWorks.Person.Person p 
-            ON c.PersonID = p.BusinessEntityID
-        LEFT JOIN (
-            SELECT 
-                ea.BusinessEntityID,
-                MIN(ea.EmailAddress) AS EmailAddress
-            FROM AdventureWorks.Person.EmailAddress ea
-            GROUP BY ea.BusinessEntityID
-        ) ea 
-            ON p.BusinessEntityID = ea.BusinessEntityID
-        LEFT JOIN (
-            SELECT 
-                ph.BusinessEntityID,
-                MIN(ph.PhoneNumber) AS PhoneNumber
-            FROM AdventureWorks.Person.PersonPhone ph
-            GROUP BY ph.BusinessEntityID
-        ) pp 
-            ON p.BusinessEntityID = pp.BusinessEntityID
-        LEFT JOIN AdventureWorks.Person.BusinessEntityAddress hma
-            ON p.BusinessEntityID = hma.BusinessEntityID AND hma.AddressTypeID = 2 
-        LEFT JOIN AdventureWorks.Person.Address hmd 
-            ON hma.AddressID = hmd.AddressID
-        LEFT JOIN AdventureWorks.Person.BusinessEntityAddress ofc
-            ON p.BusinessEntityID = ofc.BusinessEntityID AND ofc.AddressTypeID = 3 
-        LEFT JOIN AdventureWorks.Person.Address ofcd 
-            ON ofc.AddressID = ofcd.AddressID
-        LEFT JOIN AdventureWorks.HumanResources.Employee e 
-            ON e.BusinessEntityID = p.BusinessEntityID
-        LEFT JOIN AdventureWorks.HumanResources.EmployeePayHistory eph 
-            ON e.BusinessEntityID = eph.BusinessEntityID
-        LEFT JOIN AdventureWorks.Person.StateProvince sp 
-            ON hmd.StateProvinceID = sp.StateProvinceID
-        LEFT JOIN AdventureWorks.Person.CountryRegion cr
-            ON sp.CountryRegionCode = cr.CountryRegionCode
-        LEFT JOIN (
-            SELECT 
-                MIN(GeographyKey) AS GeographyKey,
-                City,
-                StateProvinceCode,
-                CountryRegionCode,
-                PostalCode
-            FROM AdventureWorksDW.dbo.DimGeography
-            GROUP BY City, StateProvinceCode, CountryRegionCode, PostalCode
-        ) dg 
-            ON hmd.City = dg.City
-           AND sp.StateProvinceCode = dg.StateProvinceCode
-           AND cr.CountryRegionCode = dg.CountryRegionCode
-           AND hmd.PostalCode = dg.PostalCode
-        LEFT JOIN ( 
-            SELECT CustomerID, MIN(CAST(OrderDate AS DATE)) AS PurchaseDate
-            FROM AdventureWorks.Sales.SalesOrderHeader
-            GROUP BY CustomerID
-        ) pd
-            ON c.CustomerID = pd.CustomerID
-    ) AS source
-    ON target.CustomerAlternateKey = source.CustomerAlternateKey
-
-    WHEN MATCHED THEN
-        UPDATE SET 
-            target.GeographyKey = source.GeographyKey,
-            target.Title = source.Title,
-            target.FirstName = source.FirstName,
-            target.MiddleName = source.MiddleName,
-            target.LastName = source.LastName,
-            target.NameStyle = source.NameStyle,
-            target.BirthDate = source.BirthDate,
-            target.MaritalStatus = source.MaritalStatus,
-            target.Suffix = source.Suffix,
-            target.Gender = source.Gender,
-            target.EmailAddress = source.EmailAddress,
-            target.YearlyIncome = source.YearlyIncome,
-            target.TotalChildren = source.TotalChildren,
-            target.NumberChildrenAtHome = source.NumberChildrenAtHome,
-            target.EnglishEducation = source.EnglishEducation,
-            target.SpanishEducation = source.SpanishEducation,
-            target.FrenchEducation = source.FrenchEducation,
-            target.EnglishOccupation = source.EnglishOccupation,
-            target.SpanishOccupation = source.SpanishOccupation,
-            target.FrenchOccupation = source.FrenchOccupation,
-            target.HouseOwnerFlag = source.HouseOwnerFlag,
-            target.NumberCarsOwned = source.NumberCarsOwned,
-            target.AddressLine1 = source.AddressLine1,
-            target.AddressLine2 = source.AddressLine2,
-            target.Phone = source.Phone,
-            target.DateFirstPurchase = source.DateFirstPurchase,
-            target.CommuteDistance = source.CommuteDistance
-
-    WHEN NOT MATCHED THEN
-        INSERT (
-            GeographyKey, CustomerAlternateKey, Title, FirstName, MiddleName, LastName,
-            NameStyle, BirthDate, MaritalStatus, Suffix, Gender, EmailAddress, YearlyIncome,
-            TotalChildren, NumberChildrenAtHome,
-            EnglishEducation, SpanishEducation, FrenchEducation,
-            EnglishOccupation, SpanishOccupation, FrenchOccupation,
-            HouseOwnerFlag, NumberCarsOwned, AddressLine1, AddressLine2, Phone,
-            DateFirstPurchase, CommuteDistance
-        )
-        VALUES (
-            source.GeographyKey, source.CustomerAlternateKey, source.Title, source.FirstName, source.MiddleName, source.LastName,
-            source.NameStyle, source.BirthDate, source.MaritalStatus, source.Suffix, source.Gender, source.EmailAddress, source.YearlyIncome,
-            source.TotalChildren, source.NumberChildrenAtHome,
-            source.EnglishEducation, source.SpanishEducation, source.FrenchEducation,
-            source.EnglishOccupation, source.SpanishOccupation, source.FrenchOccupation,
-            source.HouseOwnerFlag, source.NumberCarsOwned, source.AddressLine1, source.AddressLine2, source.Phone,
-            source.DateFirstPurchase, source.CommuteDistance
-        );
-END;
+  BEGIN
+    SET nocount ON;
+    BEGIN try
+      BEGIN TRANSACTION;
+      WITH uniquecustomersource AS
+      (
+                 SELECT     c.customerid AS custaltkey,
+                            p.title,
+                            p.firstname,
+                            p.lastname,
+                            p.middlename,
+                            Cast(p.namestyle AS   BIT)  AS namestyle,
+                            Cast(vpd.birthdate AS DATE) AS birthdate,
+                            vpd.maritalstatus,
+                            p.suffix,
+                            vpd.gender,
+                            ea.emailaddress,
+                            addr.addressline1 AS                   line1,
+                            addr.addressline2 AS                   line2,
+                            pp.phonenumber    AS                   phone,
+                            try_cast(vpd.yearlyincome as money) AS yearlyincome,
+                            vpd.totalchildren,
+                            vpd.numberchildrenathome AS noofchildathome,
+                            vpd.education            AS engedu,
+                            vpd.occupation           AS engocu,
+                            vpd.homeownerflag        AS houseflag,
+                            vpd.numbercarsowned      AS carsowned,
+                            vpd.datefirstpurchase    AS firstdate,
+                            dg.geographykey,
+                            row_number() OVER ( partition BY c.customerid ORDER BY bea.addresstypeid ASC, ea.emailaddressid ASC, pp.phonenumbertypeid ASC ) AS rownum
+                 FROM       AdventureWorks.Person.Person p
+                 INNER JOIN AdventureWorks.Sales.Customer c
+                 ON         p.businessentityid = c.personid
+                 LEFT JOIN  AdventureWorks.Person.personphone pp
+                 ON         p.businessentityid = pp.businessentityid
+                 LEFT JOIN  AdventureWorks.Person.emailaddress ea
+                 ON         p.businessentityid = ea.businessentityid
+                 LEFT JOIN  AdventureWorks.Person.businessentityaddress bea
+                 ON         p.businessentityid = bea.businessentityid
+                 LEFT JOIN  AdventureWorks.Person.address addr
+                 ON         bea.addressid = addr.addressid
+                 LEFT JOIN  adventureworks.sales.vpersondemographics vpd
+                 ON         p.businessentityid = vpd.businessentityid
+                 LEFT JOIN  adventureworksdw_ammar.dbo.dimgeography dg
+                 ON         dg.postalcode = addr.postalcode
+                 AND        dg.city = addr.city )
+      MERGE
+      INTO         adventureworksdw_ammar.dbo.dimcustomer AS tgt
+      using        (
+                          SELECT *
+                          FROM   uniquecustomersource
+                          WHERE  rownum = 1) AS src
+      ON (
+                                tgt.customeralternatekey = Cast(src.custaltkey AS NVARCHAR(15)))
+      WHEN matched THEN
+      UPDATE
+      SET              tgt.geographykey = src.geographykey,
+                       tgt.title = src.title,
+                       tgt.firstname = src.firstname,
+                       tgt.middlename = src.middlename,
+                       tgt.lastname = src.lastname,
+                       tgt.namestyle = src.namestyle,
+                       tgt.birthdate = src.birthdate,
+                       tgt.maritalstatus = src.maritalstatus,
+                       tgt.suffix = src.suffix,
+                       tgt.gender = src.gender,
+                       tgt.emailaddress = src.emailaddress,
+                       tgt.yearlyincome = src.yearlyincome,
+                       tgt.totalchildren = src.totalchildren,
+                       tgt.numberchildrenathome = src.noofchildathome,
+                       tgt.englisheducation = src.engedu,
+                       tgt.englishoccupation = src.engocu,
+                       tgt.houseownerflag = src.houseflag,
+                       tgt.numbercarsowned = src.carsowned,
+                       tgt.addressline1 = src.line1,
+                       tgt.addressline2 = src.line2,
+                       tgt.phone = src.phone,
+                       tgt.datefirstpurchase = src.firstdate
+      WHEN NOT matched THEN
+      INSERT
+             (
+                    customeralternatekey,
+                    geographykey,
+                    title,
+                    firstname,
+                    middlename,
+                    lastname,
+                    namestyle,
+                    birthdate,
+                    maritalstatus,
+                    suffix,
+                    gender,
+                    emailaddress,
+                    yearlyincome,
+                    totalchildren,
+                    numberchildrenathome,
+                    englisheducation,
+                    spanisheducation,
+                    frencheducation,
+                    englishoccupation,
+                    spanishoccupation,
+                    frenchoccupation,
+                    houseownerflag,
+                    numbercarsowned,
+                    addressline1,
+                    addressline2,
+                    phone,
+                    datefirstpurchase,
+                    commutedistance
+             )
+             VALUES
+             (
+                    Cast(src.custaltkey AS NVARCHAR(15)),
+                    src.geographykey,
+                    src.title,
+                    src.firstname,
+                    src.middlename,
+                    src.lastname,
+                    src.namestyle,
+                    src.birthdate,
+                    src.maritalstatus,
+                    src.suffix,
+                    src.gender,
+                    src.emailaddress,
+                    src.yearlyincome,
+                    src.totalchildren,
+                    src.noofchildathome,
+                    src.engedu,
+                    'N/A',
+                    'N/A',
+                    src.engocu,
+                    'N/A',
+                    'N/A',
+                    src.houseflag,
+                    src.carsowned,
+                    src.line1,
+                    src.line2,
+                    src.phone,
+                    src.firstdate,
+                    'N/A'
+             );
+      
+      COMMIT TRANSACTION;
+      PRINT 'DimCustomer loaded successfully.';
+    END try
+    BEGIN catch
+      IF @@TRANCOUNT > 0
+      ROLLBACK TRANSACTION;
+      PRINT 'Error occurred in usp_Load_DimCustomer: ' + Error_message();
+    END catch
+  END;
